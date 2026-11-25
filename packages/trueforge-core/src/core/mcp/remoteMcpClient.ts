@@ -91,11 +91,19 @@ function createTransport(
 ): McpTransport {
   const requestInit = { headers };
   if (type === 'streamable-http') {
-    return new StreamableHTTPClientTransport(url, {
+    const transport = new StreamableHTTPClientTransport(url, {
       requestInit,
       fetch: fetchFn,
       ...(sessionId !== undefined ? { sessionId } : {}),
     });
+    transport.onerror = error => {
+      if (error.message.includes('Maximum reconnection attempts')) {
+        void transport.close().catch(() => {
+          /* no-op */
+        });
+      }
+    };
+    return transport;
   }
   // eslint-disable-next-line @typescript-eslint/no-deprecated -- dual-transport probe; see TRANSPORT_PROBE_ORDER
   return new SSEClientTransport(url, { requestInit, fetch: fetchFn });

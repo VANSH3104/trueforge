@@ -127,6 +127,10 @@ export class RemoteMCP implements ToolSource {
     return this.sessionId ?? undefined;
   }
 
+  async close(): Promise<void> {
+    await this.resetConnection();
+  }
+
   // Concurrent callTool/listTools share one transport. Session-expired retry must not close it
   // while a sibling is still using it — close() aborts the sibling with "Connection closed",
   // which is not treated as session-expired, so that call is never retried.
@@ -368,6 +372,7 @@ export class RemoteMCP implements ToolSource {
                   getOperationMetrics()?.recordMcpDisconnect({ via: 'onclose' });
                   if (connection !== undefined && this._connection === connection) {
                     this.isConnected = false;
+                    this.cachedTools = undefined;
                   }
                 },
                 onError: error => {
@@ -382,6 +387,15 @@ export class RemoteMCP implements ToolSource {
                     this.logger.warn(msg, logFields);
                   } else {
                     this.logger.error(msg, logFields);
+                  }
+                  if (
+                    fields.error.includes('Maximum reconnection attempts') ||
+                    fields.error.includes('Connection closed')
+                  ) {
+                    if (connection !== undefined && this._connection === connection) {
+                      this.isConnected = false;
+                      this.cachedTools = undefined;
+                    }
                   }
                 },
               }),
